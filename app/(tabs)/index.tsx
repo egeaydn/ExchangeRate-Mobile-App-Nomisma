@@ -7,7 +7,7 @@ import { ActivityIndicator, ScrollView, StyleSheet, Text, TouchableOpacity, View
 
 export default function HomeScreen() {
   const router = useRouter();
-  const [baseCurrency, setBaseCurrency] = useState('TRY');
+  const [baseCurrency, setBaseCurrency] = useState('CHF');
   const [rates, setRates] = useState<ExchangeRates | null>(null);
   const [loading, setLoading] = useState(true);
   const [lastUpdate, setLastUpdate] = useState<string>('');
@@ -73,21 +73,30 @@ export default function HomeScreen() {
       </View>
 
       {/* Top Rates Slider */}
-      <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.topRatesScroll}>
-        {rates && Object.entries(rates.rates).slice(0, 5).map(([code, rate]) => {
-          const info = getCurrencyInfo(code);
-          const change = Math.random() * 2 - 1; // Simulated change
-          return (
-            <View key={code} style={styles.topRateCard}>
-              <Text style={styles.topRateCode}>{code}TRY</Text>
-              <Text style={styles.topRateValue}>{typeof rate === 'number' ? rate.toFixed(3).replace('.', ',') : rate}</Text>
-              <Text style={[styles.topRateChange, change > 0 ? styles.positive : styles.negative]}>
-                %{change > 0 ? '+' : ''}{change.toFixed(2)}
-              </Text>
-            </View>
-          );
-        })}
-      </ScrollView>
+      <View style={styles.topRatesContainer}>
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.topRatesScroll}>
+          {rates && rates.rates['TRY'] && ['USD', 'EUR', 'GBP', 'JPY', 'CAD'].map((code) => {
+            const rate = rates.rates[code];
+            if (!rate) return null;
+            const info = getCurrencyInfo(code);
+            const tryRate = rates.rates['TRY'];
+            const rateInTRY = (tryRate / rate);
+            const change = Math.random() * 2 - 1;
+            return (
+              <View key={code} style={styles.topRateCard}>
+                <View style={styles.topRateHeader}>
+                  <Text style={styles.topRateFlag}>{info.flag}</Text>
+                  <Text style={styles.topRateCode}>{code}TRY</Text>
+                </View>
+                <Text style={styles.topRateValue}>{rateInTRY.toFixed(3).replace('.', ',')}</Text>
+                <Text style={[styles.topRateChange, change > 0 ? styles.positive : styles.negative]}>
+                  %{change > 0 ? '+' : ''}{change.toFixed(2)}
+                </Text>
+              </View>
+            );
+          })}
+        </ScrollView>
+      </View>
 
       {/* Filter Tabs */}
       <View style={styles.filterTabs}>
@@ -104,11 +113,11 @@ export default function HomeScreen() {
 
       {/* Currency List */}
       <ScrollView style={styles.currencyList}>
-        {rates && Object.entries(rates.rates).map(([code, rate]) => {
+        {rates && rates.rates['TRY'] && Object.entries(rates.rates).filter(([code]) => code !== 'CHF' && code !== 'TRY').map(([code, rate]) => {
           const info = getCurrencyInfo(code);
-          const buyRate = typeof rate === 'number' ? rate * 0.995 : parseFloat(rate) * 0.995;
-          const sellRate = typeof rate === 'number' ? rate * 1.005 : parseFloat(rate) * 1.005;
-          const change = Math.random() * 2 - 1; // Simulated change
+          const tryRate = rates.rates['TRY'];
+          const rateInTRY = (tryRate / rate);
+          const change = Math.random() * 2 - 1;
           
           return (
             <TouchableOpacity 
@@ -130,10 +139,7 @@ export default function HomeScreen() {
               
               <View style={styles.currencyRight}>
                 <View style={styles.rateBox}>
-                  <Text style={styles.rateValue}>{buyRate.toFixed(4)}</Text>
-                </View>
-                <View style={styles.rateBox}>
-                  <Text style={styles.rateValue}>{sellRate.toFixed(4)}</Text>
+                  <Text style={styles.rateValue}>{rateInTRY.toFixed(4)}</Text>
                   <Text style={[styles.changePercent, change > 0 ? styles.positive : styles.negative]}>
                     {change > 0 ? '↑' : '↓'}{Math.abs(change).toFixed(2)}%
                   </Text>
@@ -146,26 +152,14 @@ export default function HomeScreen() {
 
       {/* Bottom Navigation */}
       <View style={styles.bottomNav}>
-        <View style={styles.navItem}>
+        <TouchableOpacity style={styles.navItem}>
           <Text style={[styles.navIcon, styles.navActive]}>🌍</Text>
           <Text style={[styles.navText, styles.navActive]}>Döviz</Text>
-        </View>
-        <View style={styles.navItem}>
-          <Text style={styles.navIcon}>🏦</Text>
-          <Text style={styles.navText}>Altın</Text>
-        </View>
-        <View style={styles.navItem}>
+        </TouchableOpacity>
+        <TouchableOpacity style={styles.navItem}>
           <Text style={styles.navIcon}>🔄</Text>
           <Text style={styles.navText}>Çevirici</Text>
-        </View>
-        <View style={styles.navItem}>
-          <Text style={styles.navIcon}>💼</Text>
-          <Text style={styles.navText}>Portföy</Text>
-        </View>
-        <View style={styles.navItem}>
-          <Text style={styles.navIcon}>🛒</Text>
-          <Text style={styles.navText}>Çarşı</Text>
-        </View>
+        </TouchableOpacity>
       </View>
     </View>
   );
@@ -205,30 +199,37 @@ const styles = StyleSheet.create({
   refreshIcon: {
     fontSize: 24,
   },
-  topRatesScroll: {
+  topRatesContainer: {
     backgroundColor: COLORS.primary,
+    height: 120,
+  },
+  topRatesScroll: {
     paddingHorizontal: 15,
-    paddingBottom: 15,
+    paddingTop: 10,
   },
   topRateCard: {
     marginRight: 30,
     alignItems: 'flex-start',
   },
+  topRateHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 3,
+  },
+  topRateFlag: {
+    fontSize: 16,
+    marginRight: 5,
+  },
   topRateCode: {
     fontSize: 11,
     color: COLORS.white,
     opacity: 0.7,
-    marginBottom: 3,
   },
   topRateValue: {
     fontSize: 22,
     fontWeight: '400',
     color: COLORS.white,
     marginBottom: 2,
-  },
-    fontWeight: 'bold',
-    color: COLORS.white,
-    marginVertical: 4,
   },
   topRateChange: {
     fontSize: 11,
@@ -267,22 +268,16 @@ const styles = StyleSheet.create({
   },
   currencyList: {
     flex: 1,
-    backgroundColor: COLORS.cardBackground,
+    backgroundColor: COLORS.white,
   },
   currencyCard: {
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: COLORS.white,
-    marginHorizontal: 15,
-    marginVertical: 6,
-    padding: 15,
-    borderRadius: 12,
-    elevation: 2,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.1,
-    shadowRadius: 2,
-    
+    paddingHorizontal: 20,
+    paddingVertical: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: '#E8E8E8',
   },
   currencyLeft: {
     flexDirection: 'row',
