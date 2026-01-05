@@ -94,7 +94,13 @@ export default function HomeScreen() {
             <Text style={styles.drawerItemText}>Döviz</Text>
           </TouchableOpacity>
           
-          <TouchableOpacity style={styles.drawerItem}>
+          <TouchableOpacity 
+            style={styles.drawerItem}
+            onPress={() => {
+              toggleDrawer();
+              router.push('/cevirici');
+            }}
+          >
             <View style={styles.drawerItemIconContainer}>
               <Text style={styles.drawerItemIcon}>🔄</Text>
             </View>
