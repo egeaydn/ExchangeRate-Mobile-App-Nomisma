@@ -165,32 +165,34 @@ export default function HomeScreen() {
           const change = Math.random() * 2 - 1;
           
           return (
-            <TouchableOpacity 
-              key={code} 
-              style={styles.currencyCard}
-              onPress={() => handleCurrencyPress(code)}
-            >
-              <View style={styles.currencyLeft}>
-                <Text style={styles.currencyFlag}>{info.flag}</Text>
-                <View>
-                  <Text style={styles.currencyCode}>{code}</Text>
-                  <Text style={styles.currencyName}>{info.name}</Text>
+            <View key={code}>
+              <TouchableOpacity 
+                style={styles.currencyCard}
+                onPress={() => handleCurrencyPress(code)}
+              >
+                <View style={styles.currencyLeft}>
+                  <Text style={styles.currencyFlag}>{info.flag}</Text>
+                  <View>
+                    <Text style={styles.currencyCode}>{code}</Text>
+                    <Text style={styles.currencyName}>{info.name}</Text>
+                  </View>
                 </View>
-              </View>
-              
-              <View style={styles.currencyCenter}>
-                <Text style={styles.updateTime}>⏰ {lastUpdate}</Text>
-              </View>
-              
-              <View style={styles.currencyRight}>
-                <View style={styles.rateBox}>
-                  <Text style={styles.rateValue}>{rateInTRY.toFixed(4)}</Text>
-                  <Text style={[styles.changePercent, change > 0 ? styles.positive : styles.negative]}>
-                    {change > 0 ? '↑' : '↓'}{Math.abs(change).toFixed(2)}%
-                  </Text>
+                
+                <View style={styles.currencyCenter}>
+                  <Text style={styles.updateTime}>⏰ {lastUpdate}</Text>
                 </View>
-              </View>
-            </TouchableOpacity>
+                
+                <View style={styles.currencyRight}>
+                  <View style={styles.rateBox}>
+                    <Text style={styles.rateValue}>{rateInTRY.toFixed(4)}</Text>
+                    <Text style={[styles.changePercent, change > 0 ? styles.positive : styles.negative]}>
+                      {change > 0 ? '↑' : '↓'}{Math.abs(change).toFixed(2)}%
+                    </Text>
+                  </View>
+                </View>
+              </TouchableOpacity>
+              <View style={styles.divider} />
+            </View>
           );
         })}
       </ScrollView>
@@ -304,22 +306,19 @@ export const styles = StyleSheet.create({
   },
   currencyList: {
     flex: 1,
-    backgroundColor: COLORS.cardBackground,
+    backgroundColor: COLORS.white,
   },
   currencyCard: {
     flexDirection: 'row',
     alignItems: 'center',
+    paddingHorizontal: 20,
+    paddingVertical: 16,
     backgroundColor: COLORS.white,
-    paddingHorizontal: 15,
-    paddingVertical: 15,
-    marginHorizontal: 10,
-    marginVertical: 5,
-    borderRadius: 12,
-    elevation: 1,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.05,
-    shadowRadius: 2,
+  },
+  divider: {
+    height: 1,
+    backgroundColor: '#E8E8E8',
+    marginLeft: 75,
   },
   currencyLeft: {
     flexDirection: 'row',
