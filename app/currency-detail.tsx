@@ -1,3 +1,6 @@
+/*
+*Created BY Ege Aydın
+*/
 import BottomNavigation from "@/components/BottomNavigation";
 import { COLORS } from "@/constants/theme";
 import { fetchHistoricalRates } from "@/services/api";
@@ -197,7 +200,7 @@ export default function CurrencyDetailScreen() {
       }
     } catch (error) {
       console.error("Error loading historical data:", error);
-      // Hata durumunda simüle edilmiş veri kullan
+      // Hata durumunda simüle edilmiş veri kullanıcaam
       setChartData({
         labels: ["Başlangıç", "", "", "", "Şimdi"],
         datasets: [
