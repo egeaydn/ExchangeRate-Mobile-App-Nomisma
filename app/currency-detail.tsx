@@ -1,71 +1,262 @@
-import BottomNavigation from '@/components/BottomNavigation';
-import { COLORS } from '@/constants/theme';
-import { LinearGradient } from 'expo-linear-gradient';
-import { useLocalSearchParams, useRouter } from 'expo-router';
-import { useState } from 'react';
-import { Dimensions, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
-import { LineChart } from 'react-native-chart-kit';
+/*
+*Created BY Ege Aydın
+*/
+import BottomNavigation from "@/components/BottomNavigation";
+import { COLORS } from "@/constants/theme";
+import { fetchHistoricalRates } from "@/services/api";
+import { LinearGradient } from "expo-linear-gradient";
+import { useLocalSearchParams, useRouter } from "expo-router";
+import { useEffect, useState } from "react";
+import {
+  ActivityIndicator,
+  Dimensions,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  View,
+} from "react-native";
+import { LineChart } from "react-native-chart-kit";
 
-const screenWidth = Dimensions.get('window').width;
+const screenWidth = Dimensions.get("window").width;
 
 export default function CurrencyDetailScreen() {
   const router = useRouter();
   const params = useLocalSearchParams();
   const { code, base, rate } = params;
-  const [selectedPeriod, setSelectedPeriod] = useState('HAFTA');
+  const [selectedPeriod, setSelectedPeriod] = useState("HAFTA");
+  const [loading, setLoading] = useState(true);
 
   // Rate zaten TRY karşılığı olarak geliyor (index.tsx'ten)
   const currentRate = parseFloat(rate as string);
 
-  // Simulated historical data
   const [chartData, setChartData] = useState({
-    labels: ['28.12', '29.12', '30.12', '31.12', '01.01'],
-    datasets: [{
-      data: [
-        currentRate * 0.985,
-        currentRate * 0.988,
-        currentRate * 0.995,
-        currentRate * 1.002,
-        currentRate,
-      ]
-    }]
+    labels: [""],
+    datasets: [
+      {
+        data: [currentRate],
+      },
+    ],
   });
 
-  const weekLow = Math.min(...chartData.datasets[0].data);
-  const weekHigh = Math.max(...chartData.datasets[0].data);
+  const periodLow = Math.min(...chartData.datasets[0].data);
+  const periodHigh = Math.max(...chartData.datasets[0].data);
   const openRate = chartData.datasets[0].data[0];
-  const prevClose = chartData.datasets[0].data[chartData.datasets[0].data.length - 2];
+  const prevClose =
+    chartData.datasets[0].data[chartData.datasets[0].data.length - 2] ||
+    openRate;
   const change = ((currentRate - prevClose) / prevClose) * 100;
+
+  // Tarih hesaplama fonksiyonu
+  const getDateRange = (period: string) => {
+    const endDate = new Date();
+    const startDate = new Date();
+
+    switch (period) {
+      case "GÜN":
+        startDate.setDate(startDate.getDate() - 1);
+        break;
+      case "HAFTA":
+        startDate.setDate(startDate.getDate() - 7);
+        break;
+      case "AY":
+        startDate.setMonth(startDate.getMonth() - 1);
+        break;
+      case "6 AY":
+        startDate.setMonth(startDate.getMonth() - 6);
+        break;
+      case "YIL":
+        startDate.setFullYear(startDate.getFullYear() - 1);
+        break;
+      case "5 YIL":
+        startDate.setFullYear(startDate.getFullYear() - 5);
+        break;
+      case "MAX":
+        startDate.setFullYear(startDate.getFullYear() - 10);
+        break;
+      default:
+        startDate.setDate(startDate.getDate() - 7);
+    }
+
+    return {
+      start: startDate.toISOString().split("T")[0],
+      end: endDate.toISOString().split("T")[0],
+    };
+  };
+
+  // Her periyod için optimal nokta sayısı
+  const getOptimalPoints = (period: string) => {
+    switch (period) {
+      case "GÜN":
+        return 8;
+      case "HAFTA":
+        return 7;
+      case "AY":
+        return 6;
+      case "6 AY":
+        return 6;
+      case "YIL":
+        return 8;
+      case "5 YIL":
+        return 6;
+      case "MAX":
+        return 8;
+      default:
+        return 7;
+    }
+  };
+
+  // Tarih etiketlerini formatla
+  const formatDateLabel = (dateStr: string, period: string) => {
+    const date = new Date(dateStr);
+
+    if (period === "GÜN") {
+      return date.toLocaleTimeString("tr-TR", {
+        hour: "2-digit",
+        minute: "2-digit",
+      });
+    } else if (period === "HAFTA") {
+      return date.toLocaleDateString("tr-TR", {
+        day: "numeric",
+        month: "numeric",
+      });
+    } else if (period === "AY") {
+      const day = date.getDate();
+      const month = date.getMonth() + 1;
+      return `${day}/${month}`;
+    } else if (period === "6 AY" || period === "YIL") {
+      return date
+        .toLocaleDateString("tr-TR", {
+          month: "short",
+          year: "2-digit",
+        })
+        .replace(" ", "'");
+    } else {
+      return date.toLocaleDateString("tr-TR", {
+        year: "numeric",
+      });
+    }
+  };
+
+  // Geçmiş verileri yükle
+  const loadHistoricalData = async () => {
+    try {
+      setLoading(true);
+      const { start, end } = getDateRange(selectedPeriod);
+
+      // TRY'den hedef para birimine geçmiş verileri çek
+      // Bu bize direkt 1 CODE = X TRY formatında veri verecek
+      const data = await fetchHistoricalRates(
+        "TRY",
+        code as string,
+        start,
+        end,
+      );
+
+      if (data && data.rates) {
+        const dates = Object.keys(data.rates).sort();
+        const rates = dates.map((date) => {
+          const rateValue = data.rates[date][code as string];
+          // TRY'den hedef paraya olan kur, bize 1 TRY = X CODE
+          // Biz 1 CODE = X TRY istiyoruz, o yüzden 1/rateValue
+          return rateValue ? 1 / rateValue : currentRate;
+        });
+
+        // Eğer veri yoksa mevcut rate'i kullan
+        if (rates.length === 0) {
+          setChartData({
+            labels: ["Şimdi"],
+            datasets: [{ data: [currentRate] }],
+          });
+        } else {
+          // Periyoda göre optimal nokta sayısı
+          const optimalPoints = getOptimalPoints(selectedPeriod);
+          const step = Math.max(1, Math.floor(dates.length / optimalPoints));
+
+          let sampledDates = [];
+          let sampledRates = [];
+
+          // İlk veriyi her zaman ekle
+          sampledDates.push(dates[0]);
+          sampledRates.push(rates[0]);
+
+          // Ortadaki verileri örnekle
+          for (let i = step; i < dates.length - 1; i += step) {
+            sampledDates.push(dates[i]);
+            sampledRates.push(rates[i]);
+          }
+
+          // Son veriyi her zaman ekle
+          if (dates.length > 1) {
+            sampledDates.push(dates[dates.length - 1]);
+            sampledRates.push(rates[rates.length - 1]);
+          }
+
+          setChartData({
+            labels: sampledDates.map((d) => formatDateLabel(d, selectedPeriod)),
+            datasets: [{ data: sampledRates }],
+          });
+        }
+      }
+    } catch (error) {
+      console.error("Error loading historical data:", error);
+      // Hata durumunda simüle edilmiş veri kullanıcaam
+      setChartData({
+        labels: ["Başlangıç", "", "", "", "Şimdi"],
+        datasets: [
+          {
+            data: [
+              currentRate * 0.985,
+              currentRate * 0.988,
+              currentRate * 0.995,
+              currentRate * 1.002,
+              currentRate,
+            ],
+          },
+        ],
+      });
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Period değiştiğinde verileri yükle
+  useEffect(() => {
+    loadHistoricalData();
+  }, [selectedPeriod]);
 
   const getCurrencyInfo = (currencyCode: string) => {
     const currencies: { [key: string]: { name: string; flag: string } } = {
-      'TRY': { name: 'Türk Lirası', flag: '🇹🇷' },
-      'USD': { name: 'Amerikan Doları', flag: '🇺🇸' },
-      'EUR': { name: 'Euro', flag: '🇪🇺' },
-      'GBP': { name: 'İngiliz Sterlini', flag: '🇬🇧' },
-      'JPY': { name: 'Japon Yeni', flag: '🇯🇵' },
-      'CHF': { name: 'İsviçre Frangı', flag: '🇨🇭' },
-      'AUD': { name: 'Avustralya Doları', flag: '🇦🇺' },
-      'CAD': { name: 'Kanada Doları', flag: '🇨🇦' },
-      'SAR': { name: 'Suudi Arabistan Riyali', flag: '🇸🇦' },
+      TRY: { name: "Türk Lirası", flag: "🇹🇷" },
+      USD: { name: "Amerikan Doları", flag: "🇺🇸" },
+      EUR: { name: "Euro", flag: "🇪🇺" },
+      GBP: { name: "İngiliz Sterlini", flag: "🇬🇧" },
+      JPY: { name: "Japon Yeni", flag: "🇯🇵" },
+      CHF: { name: "İsviçre Frangı", flag: "🇨🇭" },
+      AUD: { name: "Avustralya Doları", flag: "🇦🇺" },
+      CAD: { name: "Kanada Doları", flag: "🇨🇦" },
+      SAR: { name: "Suudi Arabistan Riyali", flag: "🇸🇦" },
     };
-    return currencies[currencyCode] || { name: currencyCode, flag: '💱' };
+    return currencies[currencyCode] || { name: currencyCode, flag: "💱" };
   };
 
   const info = getCurrencyInfo(code as string);
 
-  const periods = ['GÜN', 'HAFTA', 'AY', '6 AY', 'YIL', '5 YIL', 'MAX'];
+  const periods = ["GÜN", "HAFTA", "AY", "6 AY", "YIL", "5 YIL", "MAX"];
 
   return (
     <View style={styles.container}>
       {/* Header */}
       <LinearGradient
-        colors={['#0D47A1', '#1565C0', '#1976D2']}
+        colors={["#0D47A1", "#1565C0", "#1976D2"]}
         start={{ x: 0, y: 0 }}
         end={{ x: 1, y: 1 }}
         style={styles.header}
       >
-        <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
+        <TouchableOpacity
+          onPress={() => router.back()}
+          style={styles.backButton}
+        >
           <Text style={styles.backIcon}>←</Text>
         </TouchableOpacity>
         <Text style={styles.headerTitle}>NOMISMA</Text>
@@ -94,64 +285,88 @@ export default function CurrencyDetailScreen() {
             <Text style={styles.rateCurrency}> TRY</Text>
           </View>
           <View style={styles.changeContainer}>
-            <Text style={[styles.changeText, change >= 0 ? styles.positive : styles.negative]}>
-              {change >= 0 ? '↑' : '↓'} {Math.abs(change).toFixed(2)}%
+            <Text
+              style={[
+                styles.changeText,
+                change >= 0 ? styles.positive : styles.negative,
+              ]}
+            >
+              {change >= 0 ? "↑" : "↓"} {Math.abs(change).toFixed(2)}%
             </Text>
           </View>
         </View>
 
         {/* Chart */}
         <View style={styles.chartContainer}>
-          <LineChart
-            data={chartData}
-            width={screenWidth - 40}
-            height={220}
-            chartConfig={{
-              backgroundColor: COLORS.white,
-              backgroundGradientFrom: COLORS.white,
-              backgroundGradientTo: COLORS.white,
-              decimalPlaces: 4,
-              color: (opacity = 1) => `rgba(76, 175, 80, ${opacity})`,
-              labelColor: (opacity = 1) => `rgba(0, 0, 0, ${opacity})`,
-              style: {
-                borderRadius: 16,
-              },
-              propsForDots: {
-                r: '0',
-              },
-              propsForBackgroundLines: {
-                strokeDasharray: '',
-                stroke: '#e0e0e0',
-                strokeWidth: 1,
-              },
-            }}
-            bezier
-            style={styles.chart}
-            withInnerLines={true}
-            withOuterLines={true}
-            withVerticalLines={false}
-            withHorizontalLines={true}
-            segments={4}
-          />
-          
-          {/* Chart Labels */}
-          <View style={styles.chartLabels}>
-            <View style={styles.chartLabel}>
-              <Text style={styles.chartLabelValue}>{weekHigh.toFixed(4)}</Text>
-              <View style={styles.chartLabelBadge}>
-                <Text style={styles.chartLabelBadgeText}>{currentRate.toFixed(2)}</Text>
+          {loading ? (
+            <View style={styles.loadingChart}>
+              <ActivityIndicator size="large" color={COLORS.primary} />
+            </View>
+          ) : (
+            <>
+              <LineChart
+                data={chartData}
+                width={screenWidth - 40}
+                height={220}
+                chartConfig={{
+                  backgroundColor: COLORS.white,
+                  backgroundGradientFrom: COLORS.white,
+                  backgroundGradientTo: COLORS.white,
+                  decimalPlaces: 4,
+                  color: (opacity = 1) => `rgba(76, 175, 80, ${opacity})`,
+                  labelColor: (opacity = 1) => `rgba(0, 0, 0, ${opacity})`,
+                  style: {
+                    borderRadius: 16,
+                  },
+                  propsForDots: {
+                    r: "0",
+                  },
+                  propsForBackgroundLines: {
+                    strokeDasharray: "",
+                    stroke: "#e0e0e0",
+                    strokeWidth: 1,
+                  },
+                  propsForLabels: {
+                    fontSize: 9,
+                  },
+                }}
+                bezier
+                style={styles.chart}
+                withInnerLines={true}
+                withOuterLines={true}
+                withVerticalLines={false}
+                withHorizontalLines={true}
+                segments={4}
+                formatXLabel={(value) => value}
+                formatYLabel={(value) => parseFloat(value).toFixed(2)}
+              />
+
+              {/* Chart Labels */}
+              <View style={styles.chartLabels}>
+                <View style={styles.chartLabel}>
+                  <Text style={styles.chartLabelValue}>
+                    {periodHigh.toFixed(4)}
+                  </Text>
+                  <View style={styles.chartLabelBadge}>
+                    <Text style={styles.chartLabelBadgeText}>
+                      {currentRate.toFixed(2)}
+                    </Text>
+                  </View>
+                </View>
+                <View style={styles.chartLabel}>
+                  <Text style={styles.chartLabelValue}>
+                    {periodLow.toFixed(4)}
+                  </Text>
+                </View>
               </View>
-            </View>
-            <View style={styles.chartLabel}>
-              <Text style={styles.chartLabelValue}>{weekLow.toFixed(4)}</Text>
-            </View>
-          </View>
+            </>
+          )}
         </View>
 
         {/* Period Selector */}
-        <ScrollView 
-          horizontal 
-          showsHorizontalScrollIndicator={false} 
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
           style={styles.periodSelector}
           contentContainerStyle={styles.periodSelectorContent}
         >
@@ -160,14 +375,16 @@ export default function CurrencyDetailScreen() {
               key={period}
               style={[
                 styles.periodButton,
-                selectedPeriod === period && styles.periodButtonActive
+                selectedPeriod === period && styles.periodButtonActive,
               ]}
               onPress={() => setSelectedPeriod(period)}
             >
-              <Text style={[
-                styles.periodButtonText,
-                selectedPeriod === period && styles.periodButtonTextActive
-              ]}>
+              <Text
+                style={[
+                  styles.periodButtonText,
+                  selectedPeriod === period && styles.periodButtonTextActive,
+                ]}
+              >
                 {period}
               </Text>
             </TouchableOpacity>
@@ -176,17 +393,17 @@ export default function CurrencyDetailScreen() {
 
         {/* Stats Section */}
         <View style={styles.statsSection}>
-          <Text style={styles.statsTitle}>HAFTALIK</Text>
-          
+          <Text style={styles.statsTitle}>{selectedPeriod.toUpperCase()}</Text>
+
           <View style={styles.statsGrid}>
             <View style={styles.statCard}>
               <Text style={styles.statLabel}>EN YÜKSEK</Text>
-              <Text style={styles.statValue}>{weekHigh.toFixed(4)}</Text>
+              <Text style={styles.statValue}>{periodHigh.toFixed(4)}</Text>
             </View>
-            
+
             <View style={styles.statCard}>
               <Text style={styles.statLabel}>EN DÜŞÜK</Text>
-              <Text style={styles.statValue}>{weekLow.toFixed(4)}</Text>
+              <Text style={styles.statValue}>{periodLow.toFixed(4)}</Text>
             </View>
           </View>
 
@@ -195,7 +412,7 @@ export default function CurrencyDetailScreen() {
               <Text style={styles.statLabel}>AÇILIŞ</Text>
               <Text style={styles.statValue}>{openRate.toFixed(4)}</Text>
             </View>
-            
+
             <View style={styles.statCard}>
               <Text style={styles.statLabel}>ÖNCEKİ KAPANIŞ</Text>
               <Text style={styles.statValue}>{prevClose.toFixed(4)}</Text>
@@ -204,8 +421,7 @@ export default function CurrencyDetailScreen() {
         </View>
       </ScrollView>
 
-              <BottomNavigation />
-
+      <BottomNavigation />
     </View>
   );
 }
@@ -219,9 +435,9 @@ const styles = StyleSheet.create({
     paddingTop: 45,
     paddingBottom: 12,
     paddingHorizontal: 20,
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
   },
   backButton: {
     width: 40,
@@ -232,12 +448,12 @@ const styles = StyleSheet.create({
   },
   headerTitle: {
     fontSize: 24,
-    fontWeight: '600',
+    fontWeight: "600",
     color: COLORS.white,
     letterSpacing: 6,
   },
   headerActions: {
-    flexDirection: 'row',
+    flexDirection: "row",
     gap: 15,
   },
   headerIcon: {
@@ -252,7 +468,7 @@ const styles = StyleSheet.create({
   },
   currencyCode: {
     fontSize: 18,
-    fontWeight: '700',
+    fontWeight: "700",
     color: COLORS.text,
   },
   currencyName: {
@@ -263,25 +479,25 @@ const styles = StyleSheet.create({
   rateContainer: {
     paddingHorizontal: 20,
     paddingTop: 15,
-    alignItems: 'baseline',
+    alignItems: "baseline",
   },
   rateRow: {
-    flexDirection: 'row',
-    alignItems: 'baseline',
+    flexDirection: "row",
+    alignItems: "baseline",
   },
   rateLabel: {
     fontSize: 20,
-    fontWeight: '600',
+    fontWeight: "600",
     color: COLORS.textSecondary,
   },
   currentRate: {
     fontSize: 42,
-    fontWeight: '700',
+    fontWeight: "700",
     color: COLORS.text,
   },
   rateCurrency: {
     fontSize: 20,
-    fontWeight: '600',
+    fontWeight: "600",
     color: COLORS.textSecondary,
   },
   changeContainer: {
@@ -291,38 +507,43 @@ const styles = StyleSheet.create({
   },
   changeText: {
     fontSize: 16,
-    fontWeight: '600',
+    fontWeight: "600",
   },
   positive: {
-    color: '#4CAF50',
+    color: "#4CAF50",
   },
   negative: {
-    color: '#F44336',
+    color: "#F44336",
   },
   chartContainer: {
     marginTop: 20,
     paddingHorizontal: 20,
-    position: 'relative',
+    position: "relative",
+  },
+  loadingChart: {
+    height: 220,
+    justifyContent: "center",
+    alignItems: "center",
   },
   chart: {
     borderRadius: 16,
   },
   chartLabels: {
-    position: 'absolute',
+    position: "absolute",
     right: 30,
     top: 20,
     bottom: 40,
-    justifyContent: 'space-between',
+    justifyContent: "space-between",
   },
   chartLabel: {
-    alignItems: 'flex-end',
+    alignItems: "flex-end",
   },
   chartLabelValue: {
     fontSize: 11,
     color: COLORS.textSecondary,
   },
   chartLabelBadge: {
-    backgroundColor: '#4CAF50',
+    backgroundColor: "#4CAF50",
     paddingHorizontal: 8,
     paddingVertical: 4,
     borderRadius: 8,
@@ -331,7 +552,7 @@ const styles = StyleSheet.create({
   chartLabelBadgeText: {
     fontSize: 10,
     color: COLORS.white,
-    fontWeight: '600',
+    fontWeight: "600",
   },
   periodSelector: {
     marginTop: 20,
@@ -352,11 +573,11 @@ const styles = StyleSheet.create({
   periodButtonText: {
     fontSize: 13,
     color: COLORS.textSecondary,
-    fontWeight: '500',
+    fontWeight: "500",
   },
   periodButtonTextActive: {
     color: COLORS.white,
-    fontWeight: '600',
+    fontWeight: "600",
   },
   statsSection: {
     paddingHorizontal: 20,
@@ -365,13 +586,13 @@ const styles = StyleSheet.create({
   },
   statsTitle: {
     fontSize: 13,
-    fontWeight: '600',
+    fontWeight: "600",
     color: COLORS.textSecondary,
     marginBottom: 15,
     letterSpacing: 1,
   },
   statsGrid: {
-    flexDirection: 'row',
+    flexDirection: "row",
     gap: 10,
     marginBottom: 10,
   },
@@ -385,11 +606,11 @@ const styles = StyleSheet.create({
     fontSize: 11,
     color: COLORS.textSecondary,
     marginBottom: 8,
-    fontWeight: '500',
+    fontWeight: "500",
   },
   statValue: {
     fontSize: 20,
-    fontWeight: '700',
+    fontWeight: "700",
     color: COLORS.text,
   },
 });
